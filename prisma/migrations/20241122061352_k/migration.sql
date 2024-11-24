@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `transaction` MODIFY `amount` INTEGER NOT NULL DEFAULT 0,
+    MODIFY `total` INTEGER NOT NULL DEFAULT 0;

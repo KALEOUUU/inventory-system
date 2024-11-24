@@ -13,26 +13,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  accounts  Account[]
-  createdAt DateTime  @default(now())
+enum type {
+  INCOME
+  EXPENSE
 }
 
-model Account {
-  id           Int           @id @default(autoincrement())
-  balance      Float         @default(0)
-  userId       Int
-  user         User          @relation(fields: [userId], references: [id])
-  transactions Transaction[]
-}
-
-model Transaction {
-  id        Int      @id @default(autoincrement())
-  amount    Float
-  accountId Int
-  account   Account  @relation(fields: [accountId], references: [id])
-  createdAt DateTime @default(now())
+model transaction {
+  id          Int     @id @default(autoincrement())
+  type        type     @default(INCOME)
+  amount      Int     @default(0)
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  total       Int    @default(0)
 }
