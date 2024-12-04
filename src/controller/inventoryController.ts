@@ -27,16 +27,28 @@ export const createItem = async (req: Request, res: Response): Promise<any> => {
 
     // Verify item was created successfully
     const createdItem = await prisma.item.findFirst({
-      where: { id: item.id, name: item.name, category: item.category, location: item.location, quantity: item.quantity }
+      where: { id: item.id, name: item.name, }
     });
 
-    if (createdItem != item) {
+    if(name != prisma.item.findFirst({ where: { name } })) {
       return res.status(400).json({
         success: false,
         message: "Failed to create item"
       });
     }
-    
+
+    if (!createdItem) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to create item"
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Item berhasil ditambahkan",
+      data: item
+    });
   } catch (error) {
     // Log the error for debugging
     console.error('Create item error:', error);
