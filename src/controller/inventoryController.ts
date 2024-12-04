@@ -4,10 +4,18 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient({ errorFormat: "pretty" });
 
 // item management (admin only)
-export const createItem = async (req: Request, res: Response) => {
+export const createItem = async (req: Request, res: Response): Promise<any> => {
   try {
     const { name, category, location, quantity } = req.body;
 
+    if (quantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity cannot be negative"
+      });
+    }
+
+    // Create the item first
     const item = await prisma.item.create({
       data: {
         name,
@@ -17,15 +25,26 @@ export const createItem = async (req: Request, res: Response) => {
       }
     });
 
-    res.status(201).json({
-      success: true,
-      data: item
+    // Verify item was created successfully
+    const createdItem = await prisma.item.findFirst({
+      where: { id: item.id, name: item.name, category: item.category, location: item.location, quantity: item.quantity }
     });
+
+    if (createdItem != item) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to create item"
+      });
+    }
+    
   } catch (error) {
+    // Log the error for debugging
+    console.error('Create item error:', error);
+    
     res.status(500).json({
       success: false,
       message: "Failed to create item",
-      error
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
     });
   }
 };
