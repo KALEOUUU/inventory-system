@@ -13,17 +13,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum type {
-  INCOME
-  EXPENSE
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @default("")
+  password  String    @default("")
+  role      Role      @default(USER)
+  requests  Request[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-model transaction {
-  id          Int     @id @default(autoincrement())
-  type        type     @default(INCOME)
-  amount      Int     @default(0)
-  description String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  total       Int    @default(0)
+enum Role {
+  ADMIN
+  USER
 }
+
+model Item {
+  id          Int       @id @default(autoincrement())
+  name        String    @default("")
+  description String?   @default("")
+  category    String    @default("")
+  location    String    @default("")
+  quantity    Int       @default(0)
+  requests    Request[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Request {
+  borrowId          Int    @id @default(autoincrement())
+  user              User      @relation(fields: [userId], references: [id])
+  userId            Int       @default(0)
+  item              Item      @relation(fields: [itemId], references: [id])
+  itemId            Int       @default(0)
+  borrowDate        DateTime  @default(now())
+  returnDate        DateTime  @default(now())
+  actualReturnDate  DateTime? 
+}
+
+

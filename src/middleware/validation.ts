@@ -1,71 +1,72 @@
-import Joi from 'joi';
-import { Request, Response, NextFunction } from 'express';
-
+import { Request, Response, NextFunction } from "express";
+import Joi from "joi";
 
 const validationIdSchema = Joi.object({
     id: Joi.number().required()
-})
+});
 
-const financialRecordSchema = Joi.object({
-    amount: Joi.number().required(),
-    type: Joi.valid("INCOME", "EXPENSE").required(),
-    description: Joi.string().required(),
-    createdAt: Joi.string().required()
-    });
+const validationRequestSchema = Joi.object({
+    userId: Joi.number().required(),
+    facilityId: Joi.number().required(),
+    startDate: Joi.date().required(),
+    endDate: Joi.date().required(),
+});
 
-const UpdatevalidationSchema = Joi.object({
-    amount: Joi.number().optional(),
-    type: Joi.valid("INCOME", "EXPENSE").optional(),
-    description: Joi.string().optional(),
-    createdAt: Joi.string().optional()
-    });
+const updateRequestSchema = Joi.object({
+    userId: Joi.number().required(),
+    facilityId: Joi.number().required(),
+    startDate: Joi.date().required(),
+    endDate: Joi.date().required(),
+});
 
-export const Createvalidation = (
+export const createValidation = (
     req: Request,
     res: Response,
     next: NextFunction
 ): any => {
-    console.log(req.body)
-    const validate = financialRecordSchema.validate(req.body)
-    console.log(validate.error)
-
-    if (validate.error){
+    console.log(req.body);
+    const validate = validationRequestSchema.validate(req.body);
+    console.log(validate.error);
+    
+    if (validate.error) {
         return res.status(400).json({
-            message: validate.error.details.map((item) => item.message).join(" ")
-        })
+            message: validate.error.details.map((error) => error.message).join(" ")
+        });
     }
-    next()
-}
+    next();
+};
 
-export const Updatevalidation = (
+export const updateValidation = (
     req: Request,
     res: Response,
     next: NextFunction
 ): any => {
-    const validateId = validationIdSchema.validate(req.params)
-    if (validateId.error){
+    const validateId = validationIdSchema.validate(req.params);
+    if (validateId.error) {
         return res.status(400).json({
             message: validateId.error.details.map((error) => error.message).join()
-        })
+        });
     }
 
-    const validate = UpdatevalidationSchema.validate(req.body)
-
-    if (validate.error){
+    const validate = updateRequestSchema.validate(req.body);
+    if (validate.error) {
         return res.status(400).json({
             message: validate.error.details.map((error) => error.message).join()
-        })
+        });
     }
-    next()
-}
+    next();
+};
 
-export const deleteValidation = (req:Request,res:Response,next:NextFunction):any =>{
-    const validate = validationIdSchema.validate(req.params)
-    if (validate.error){
+export const deleteValidation = (
+    req: Request,
+    res: Response,
+    next: NextFunction
+): any => {
+    const validate = validationIdSchema.validate(req.params);
+    if (validate.error) {
         return res.status(400).json({
             message: validate.error.details.map((error) => error.message).join()
-        })
+        });
     }
-    next()
-}
-
+    next();
+};
