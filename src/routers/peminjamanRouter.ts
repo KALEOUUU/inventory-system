@@ -3,7 +3,9 @@ import {
     userCreateRequest,
     userGetAllRequest,
     userDeleteRequest,
-    updateReturnDate
+    updateReturnDate,
+    analyzeUsage,
+    analyzeItemEfficiency
 } from "../controller/peminjamanController";
 import { verifyToken, verifyRole } from "../middleware/authorization";
 const router = Router();
@@ -12,5 +14,7 @@ router.post("/borrow", [verifyToken, verifyRole(["USER"])], userCreateRequest);
 router.get("/", [verifyToken, verifyRole(["USER", "ADMIN"])], userGetAllRequest);
 router.post("/return", [verifyToken, verifyRole(["USER", "ADMIN"])], updateReturnDate);
 router.delete("/:id", [verifyToken, verifyRole(["USER", "ADMIN"])], userDeleteRequest);
+router.post("/usage-report", [verifyToken, verifyRole(["ADMIN"])], analyzeUsage);
+router.post("/borrow-analysis", [verifyToken, verifyRole(["ADMIN"])], analyzeItemEfficiency);
 
 export default router;

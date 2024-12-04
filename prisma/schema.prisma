@@ -38,17 +38,25 @@ model Item {
   requests    Request[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([category])
+  @@index([location])
 }
 
 model Request {
-  borrowId          Int    @id @default(autoincrement())
+  borrowId          Int       @id @default(autoincrement())
   user              User      @relation(fields: [userId], references: [id])
   userId            Int       @default(0)
   item              Item      @relation(fields: [itemId], references: [id])
   itemId            Int       @default(0)
   borrowDate        DateTime  @default(now())
   returnDate        DateTime  @default(now())
-  actualReturnDate  DateTime? 
+  actualReturnDate  DateTime?
+  status            String    @default("BORROWED")
+
+  @@index([borrowDate])
+  @@index([actualReturnDate])
+  @@index([status])
 }
 
 
