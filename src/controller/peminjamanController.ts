@@ -4,87 +4,214 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient({ errorFormat: "pretty" });
 
 // Create new request
-export const userCreateRequest = async (req: Request, res: Response) => {
-    try {
-      const { userId, itemId, borrowDate, returnDate } = req.body;
-  
-      const request = await prisma.request.create({
-        data: {
-          userId,
-          itemId, 
-          borrowDate: new Date(borrowDate),
-          returnDate: new Date(returnDate),
-        }
-      });
-  
-      res.status(201).json({
-        success: true,
-        message: "Peminjaman berhasil dicatat",
-        data: {
-          borrowId: request.borrowId,
-          itemId: request.itemId.toString(),
-          userId: request.userId.toString(),
-          borrowDate: request.borrowDate.toISOString().split('T')[0]
-        }
-      });
-    } catch (error) {
-      res.status(500).json({
+export const userCreateRequest = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { itemId, borrowDate, returnDate, quantity = 1 } = req.body;
+    const userId = req.body.user?.id;
+
+    if (userId <=0 ) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to create request",
-        error
+        message: "userId must be a positive number"
       });
     }
-  };
+
+    // Validate required inputs
+    if (!itemId || !borrowDate || !returnDate || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: itemId, borrowDate, returnDate, and userId are required"
+      });
+    }
+
+    // Validate that the requesting user matches the authenticated user
+    if (parseInt(userId) !== req.body.user?.id) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only create requests for your own user account"
+      });
+    }
+
+    // Validate input types and positive values
+
+    const parsedItemId = parseInt(itemId);
+    
+    if (isNaN(parsedItemId)) {
+      return res.status(400).json({
+        success: false,
+        message: "itemId and userId must be valid numbers"
+      });
+    }
+
+    // Validate dates
+    const borrowDateTime = new Date(borrowDate);
+    const returnDateTime = new Date(returnDate);
+    const now = new Date();
+
+    if (isNaN(borrowDateTime.getTime()) || isNaN(returnDateTime.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format for borrowDate or returnDate"
+      });
+    }
+
+    if (borrowDateTime < now) {
+      return res.status(400).json({
+        success: false,
+        message: "Borrow date cannot be in the past"
+      });
+    }
+
+    if (returnDateTime < borrowDateTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Return date cannot be before borrow date"
+      });
+    }
+
+    // Validate quantity
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be a positive integer"
+      });
+    }
+
+    // Check item availability
+    const item = await prisma.item.findUnique({
+      where: { id: parsedItemId }
+    });
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found"
+      });
+    }
+
+    // Check if quantity is available
+    const activeRequests = await prisma.request.aggregate({
+      where: {
+        itemId: parsedItemId,
+        status: 'BORROWED',
+      },
+      _sum: {
+        quantity: true
+      }
+    });
+
+    const totalBorrowed = activeRequests._sum.quantity || 0;
+    const availableQuantity = item.quantity - totalBorrowed;
+
+    if (quantity > availableQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Requested quantity not available. Only ${availableQuantity} items available.`
+      });
+    }
+
+    const request = await prisma.request.create({
+      data: {
+        userId: parseInt(userId),
+        itemId: parsedItemId,
+        borrowDate: borrowDateTime,
+        returnDate: returnDateTime,
+        status: 'PENDING',
+        quantity: quantity
+      },
+      include: {
+        item: true
+   
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Request successfully created",
+      data: request
+    });
+  } catch (error) {
+    console.error('Create request error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to create request",
+      error: error instanceof Error ? error.message : 'An unknown error occurred'
+    });
+  }
+};
+
   
-  // Get all requests
-  export const userGetAllRequest = async (req: Request, res: Response) => {
+  // Update return date for borrowed item
+  export const updateReturnDate = async (req: Request, res: Response): Promise<any> => {
     try {
-      const requests = await prisma.request.findMany({
+      const { borrowId, returnDate, returnedQuantity } = req.body;
+
+      // Get the current request
+      const currentRequest = await prisma.request.findUnique({
+        where: {
+          borrowId: parseInt(borrowId)
+        },
         include: {
-          user: true,
           item: true
         }
       });
-  
-      res.status(200).json({
-        success: true,
-        data: requests
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Failed to get requests",
-        error
-      });
-    }
-  };
-  
-  // Update return date for borrowed item
-  export const updateReturnDate = async (req: Request, res: Response) => {
-    try {
-      const { borrowId, returnDate } = req.body;
+
+      if (!currentRequest) {
+        return res.status(404).json({
+          status: "error",
+          message: "Request not found"
+        });
+      }
+
+      // Validate returned quantity
+      if (!returnedQuantity || returnedQuantity !== currentRequest.quantity) {
+        return res.status(400).json({
+          status: "error",
+          message: `Return quantity must match borrowed quantity of ${currentRequest.quantity}`
+        });
+      }
+
+      const actualReturnDate = new Date(returnDate);
+      const borrowDate = currentRequest.borrowDate;
+
+      // Check if return date is before borrow date
+      if (actualReturnDate < borrowDate) {
+        return res.status(400).json({
+          status: "error",
+          message: "Return date cannot be earlier than borrow date"
+        });
+      }
+
+      const isLate = actualReturnDate > currentRequest.returnDate;
 
       const request = await prisma.request.update({
         where: {
           borrowId: parseInt(borrowId)
         },
         data: {
-          returnDate: new Date(returnDate)
+          actualReturnDate: actualReturnDate,
+          status: 'RETURNED'
         },
         include: {
-          user: true,
+          user:true,
           item: true
         }
       });
 
       res.status(200).json({
         status: "success", 
-        message: "pengembalian barang berhasil dicatat",
+        message: isLate ? 
+          "Pengembalian barang berhasil dicatat, namun terlambat dari jadwal" :
+          "Pengembalian barang berhasil dicatat tepat waktu",
         data: {
           borrowId: request.borrowId,
           itemId: request.itemId.toString(),
           userId: request.userId.toString(),
-          actual_return_date: request.returnDate.toISOString().split('T')[0]
+          quantity: request.quantity,
+          returnedQuantity: returnedQuantity,
+          actual_return_date: request.actualReturnDate?.toISOString().split('T')[0] || null,
+          scheduled_return_date: request.returnDate.toISOString().split('T')[0],
+          isLate: isLate
         }
       });
     } catch (error) {
@@ -171,10 +298,17 @@ export const userCreateRequest = async (req: Request, res: Response) => {
             where: {
                 requests: {
                     some: {
-                        borrowDate: {
-                            gte: new Date(startDate),
-                            lte: new Date(endDate)
-                        }
+                        OR: [
+                            {
+                                borrowDate: {
+                                    gte: new Date(startDate),
+                                    lte: new Date(endDate)
+                                }
+                            },
+                            {
+                                status: 'BORROWED'  // Tambahkan untuk mendapatkan item yang masih dipinjam
+                            }
+                        ]
                     }
                 }
             },
@@ -182,14 +316,24 @@ export const userCreateRequest = async (req: Request, res: Response) => {
                 [group_by]: true,
                 requests: {
                     where: {
-                        borrowDate: {
-                            gte: new Date(startDate),
-                            lte: new Date(endDate)
-                        }
+                        OR: [
+                            {
+                                borrowDate: {
+                                    gte: new Date(startDate),
+                                    lte: new Date(endDate)
+                                }
+                            },
+                            {
+                                status: 'BORROWED'  // Tambahkan untuk mendapatkan item yang masih dipinjam
+                            }
+                        ]
                     },
                     select: {
                         borrowId: true,
-                        actualReturnDate: true
+                        actualReturnDate: true,
+                        status: true,
+                        borrowDate: true,
+                        returnDate: true
                     }
                 }
             }
@@ -202,18 +346,36 @@ export const userCreateRequest = async (req: Request, res: Response) => {
             if (!acc[group]) {
                 acc[group] = {
                     totalBorrowed: 0,
-                    totalReturned: 0,
-                    itemsInUse: 0
+                    itemsInUse: 0,
+                    returnedOnTime: 0,
+                    returnedLate: 0
                 }
             }
 
             const requests = item.requests
             acc[group].totalBorrowed += requests.length
-            acc[group].totalReturned += requests.filter(r => r.actualReturnDate).length
-            acc[group].itemsInUse = acc[group].totalBorrowed - acc[group].totalReturned
+            
+            // Hitung items in use (yang sedang dipinjam)
+            acc[group].itemsInUse = requests.filter(r => r.status === 'PENDING').length
+            
+            // Hitung yang sudah dikembalikan (tepat waktu atau terlambat)
+            requests.forEach(r => {
+                if (r.status === 'RETURNED' && r.actualReturnDate) {
+                    if (new Date(r.actualReturnDate) > new Date(r.returnDate)) {
+                        acc[group].returnedLate++
+                    } else {
+                        acc[group].returnedOnTime++
+                    }
+                }
+            })
 
             return acc
-        }, {} as Record<string, { totalBorrowed: number; totalReturned: number; itemsInUse: number }>)
+        }, {} as Record<string, {
+            totalBorrowed: number;
+            itemsInUse: number;
+            returnedOnTime: number;
+            returnedLate: number;
+        }>)
 
         // Format hasil akhir
         const usageAnalysis = Object.entries(groupedData).map(([group, stats]) => ({
@@ -276,12 +438,17 @@ export const analyzeItemEfficiency = async (req: Request, res: Response): Promis
                     }
                 }
             },
+            where: {
+                requests: {
+                    some: {} // Only include items that have been borrowed at least once
+                }
+            },
             orderBy: {
                 requests: {
                     _count: 'desc'
                 }
             },
-            take: 10 // Ambil 10 item teratas
+            take: 10 
         })
 
         // 2. Analisis barang yang tidak efisien (sering terlambat dikembalikan)
@@ -299,24 +466,27 @@ export const analyzeItemEfficiency = async (req: Request, res: Response): Promis
                     },
                     select: {
                         returnDate: true,
-                        actualReturnDate: true
+                        actualReturnDate: true,
+                        status: true
                     }
                 }
             }
         })
 
         // Proses data untuk format response
-        const frequentlyBorrowedFormatted = frequentlyBorrowedItems.map(item => ({
-            itemId: item.id,
-            name: item.name,
-            category: item.category,
-            totalBorrowed: item._count.requests
-        }))
+        const frequentlyBorrowedFormatted = frequentlyBorrowedItems
+            .filter(item => item._count.requests > 0)
+            .map(item => ({
+                itemId: item.id,
+                name: item.name,
+                category: item.category,
+                totalBorrowed: item._count.requests
+            }))
 
         const inefficientItemsFormatted = inefficientItems.map(item => {
             const totalBorrowed = item.requests.length
             const totalLateReturns = item.requests.filter(req => {
-                if (!req.actualReturnDate) return false
+                if (!req.actualReturnDate || req.status !== 'RETURNED') return false
                 return new Date(req.actualReturnDate) > new Date(req.returnDate)
             }).length
 
@@ -325,11 +495,12 @@ export const analyzeItemEfficiency = async (req: Request, res: Response): Promis
                 name: item.name,
                 category: item.category,
                 totalBorrowed,
-                totalLateReturns
+                totalLateReturns,
+                currentlyInUse: item.requests.filter(req => req.status === 'BORROWED').length
             }
-        }).filter(item => item.totalLateReturns > 0) // Hanya tampilkan item yang pernah terlambat
-        .sort((a, b) => b.totalLateReturns - a.totalLateReturns) // Urutkan berdasarkan keterlambatan
-        .slice(0, 10) // Ambil 10 item teratas
+        }).filter(item => item.totalLateReturns > 0) 
+        .sort((a, b) => b.totalLateReturns - a.totalLateReturns)
+        .slice(0, 10)
 
         res.status(200).json({
             status: "Success",

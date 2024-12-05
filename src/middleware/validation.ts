@@ -6,18 +6,22 @@ const validationIdSchema = Joi.object({
 });
 
 const validationRequestSchema = Joi.object({
-    userId: Joi.number().required(),
-    facilityId: Joi.number().required(),
-    startDate: Joi.date().required(),
-    endDate: Joi.date().required(),
-});
+    userId: Joi.number().required().positive(),
+    itemId: Joi.number().required().positive(),
+    borrowDate: Joi.date().required(),
+    returnDate: Joi.date().required(),
+    quantity: Joi.number().required().positive(),
+    user: Joi.object({
+        id: Joi.number().required()
+    }).unknown(true)
+}).unknown(false);
 
 const updateRequestSchema = Joi.object({
     userId: Joi.number().required(),
     facilityId: Joi.number().required(),
     startDate: Joi.date().required(),
     endDate: Joi.date().required(),
-});
+}).unknown(false);
 
 export const createValidation = (
     req: Request,

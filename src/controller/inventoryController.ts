@@ -6,53 +6,59 @@ const prisma = new PrismaClient({ errorFormat: "pretty" });
 // item management (admin only)
 export const createItem = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { name, category, location, quantity } = req.body;
+    const { name, category, location, quantity, description } = req.body;
 
-    if (quantity < 0) {
+    // Validate required fields
+    if (!name || !category || !location) {
       return res.status(400).json({
         success: false,
-        message: "Quantity cannot be negative"
+        message: "Name, category, and location are required"
       });
     }
 
-    // Create the item first
-    const item = await prisma.item.create({
-      data: {
-        name,
-        category,
-        location,
-        quantity
+    // Validate quantity
+    const parsedQuantity = parseInt(quantity);
+    if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be a non-negative number"
+      });
+    }
+
+    // Check for duplicate item name using case-insensitive search
+    const existingItem = await prisma.item.findFirst({
+      where: {
+        name: {
+          equals: name.toLowerCase()
+          
+        }
       }
     });
 
-    // Verify item was created successfully
-    const createdItem = await prisma.item.findFirst({
-      where: { id: item.id, name: item.name, }
+    if (existingItem) {
+      return res.status(400).json({
+        success: false,
+        message: "Item with this name already exists"
+      });
+    }
+
+    const item = await prisma.item.create({
+      data: {
+        name: name.trim(), // Remove any leading/trailing whitespace
+        category: category.trim(),
+        location: location.trim(),
+        quantity: parsedQuantity,
+        description: description?.trim() || ""
+      }
     });
-
-    if(name != prisma.item.findFirst({ where: { name } })) {
-      return res.status(400).json({
-        success: false,
-        message: "Failed to create item"
-      });
-    }
-
-    if (!createdItem) {
-      return res.status(400).json({
-        success: false,
-        message: "Failed to create item"
-      });
-    }
 
     res.status(201).json({
       success: true,
-      message: "Item berhasil ditambahkan",
+      message: "Item successfully added",
       data: item
     });
   } catch (error) {
-    // Log the error for debugging
     console.error('Create item error:', error);
-    
     res.status(500).json({
       success: false,
       message: "Failed to create item",
@@ -61,22 +67,61 @@ export const createItem = async (req: Request, res: Response): Promise<any> => {
   }
 };
 
-export const updateItem = async (req: Request, res: Response) => {
+export const updateItem = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-    const { name, description, category, location, quantity } = req.body;
+    const { name, category, location, quantity } = req.body;
+
+    // Get existing item
+    const existingItem = await prisma.item.findUnique({
+      where: {
+        id: parseInt(id)
+      }
+    });
+
+    if (!existingItem) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found"
+      });
+    }
+
+    // Build update data object with only provided fields
+    const updateData: any = {};
+    
+    if (name !== undefined) {
+      updateData.name = name.trim();
+    }
+    if (category !== undefined) {
+      updateData.category = category.trim(); 
+    }
+    if (location !== undefined) {
+      updateData.location = location.trim();
+    }
+    if (quantity !== undefined) {
+      const parsedQuantity = parseInt(quantity);
+      if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Quantity must be a non-negative number"
+        });
+      }
+      updateData.quantity = parsedQuantity;
+    }
+
+    // Only update if there are fields to update
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields provided for update"
+      });
+    }
 
     const item = await prisma.item.update({
       where: {
         id: parseInt(id)
       },
-      data: {
-        name,
-        description,
-        category,
-        location,
-        quantity
-      }
+      data: updateData
     });
 
     res.status(200).json({
@@ -92,8 +137,7 @@ export const updateItem = async (req: Request, res: Response) => {
     });
   }
 };
-
-export const deleteItem = async (req: Request, res: Response) => {
+export const deleteItem = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
 
@@ -116,7 +160,7 @@ export const deleteItem = async (req: Request, res: Response) => {
   }
 };
 
-export const getAllItem = async (req: Request, res: Response) => {
+export const getAllItem = async (req: Request, res: Response): Promise<any> => {
   try {
     const facilities = await prisma.item.findMany();
 

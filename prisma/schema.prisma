@@ -43,16 +43,24 @@ model Item {
   @@index([location])
 }
 
+enum RequestStatus {
+  PENDING
+  BORROWED
+  RETURNED
+  CANCELLED
+}
+
 model Request {
-  borrowId          Int       @id @default(autoincrement())
-  user              User      @relation(fields: [userId], references: [id])
-  userId            Int       @default(0)
-  item              Item      @relation(fields: [itemId], references: [id])
-  itemId            Int       @default(0)
-  borrowDate        DateTime  @default(now())
-  returnDate        DateTime  @default(now())
-  actualReturnDate  DateTime?
-  status            String    @default("BORROWED")
+  borrowId          Int           @id @default(autoincrement())
+  user              User          @relation(fields: [userId], references: [id])
+  userId            Int
+  item              Item          @relation(fields: [itemId], references: [id])
+  itemId            Int
+  borrowDate        DateTime      @default(now())
+  returnDate        DateTime
+  actualReturnDate  DateTime?     @default(now())
+  status            RequestStatus @default(PENDING)
+  quantity          Int           @default(1)
 
   @@index([borrowDate])
   @@index([actualReturnDate])
